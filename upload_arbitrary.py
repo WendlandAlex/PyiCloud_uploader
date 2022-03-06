@@ -194,7 +194,7 @@ try:
                 to_upload_path = local.parent.joinpath(new_file_name)
                 shutil.copy(local, to_upload_path)
          
-    resp = upload_archive(
+    uploaded, deleted = upload_archive(
         local_path=to_upload_path,
         iCloud_dir=dir,
         existing_item=existing_item,
@@ -204,4 +204,4 @@ try:
 except Exception as e:
     raise e
 
-print(resp)
+print('UPLOADED',pprint.pformat(uploaded.data),'\nDELETED',pprint.pformat(deleted),sep='\n')
