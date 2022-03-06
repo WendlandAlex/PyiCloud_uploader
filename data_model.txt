@@ -1,0 +1,5 @@
+({'dateCreated': '2022-02-13T05:00:20Z', 'drivewsid': 'FOLDER::com.apple.CloudDocs::FAC24BE2-7855-4851-904D-933D85DE2438', 
+'docwsid': 'FAC24BE2-7855-4851-904D-933D85DE2438', 'zone': 'com.apple.CloudDocs', 'name': 'Backups',
+'parentId': 'FOLDER::com.apple.CloudDocs::root', 'isChainedToParent': True, 'etag': 'kfg',
+'type': 'FOLDER', 'assetQuota': 128, 'fileCount': 4, 'shareCount': 0, 
+'shareAliasCount': 0, 'directChildrenCount': 5}, None)
