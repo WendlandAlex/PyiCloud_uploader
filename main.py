@@ -7,6 +7,8 @@ import os
 import pprint
 import sys
 
+from utils import authenticate_session
+
 dotenv.load_dotenv()
 
 if os.getenv('EMAIL') is not None:
