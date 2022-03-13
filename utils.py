@@ -3,6 +3,8 @@ import os
 from pathlib import Path
 import pyicloud
 from pyicloud.exceptions import PyiCloudException, PyiCloudAPIResponseException, PyiCloudFailedLoginException, PyiCloudNoDevicesException, PyiCloudServiceNotActivatedException
+import pprint
+import shutil
 
 def authenticate_session(PyiCloudService_object):
     # first try to load session data from the default location on disk
@@ -31,12 +33,12 @@ def authenticate_session(PyiCloudService_object):
             raise e
 
 
-
 def get_environment_variables():
     if os.getenv('EMAIL') is not None:
         user = os.getenv('EMAIL')
     else:
         user = click.prompt('Enter AppleID')
+
 
     if os.getenv('PASSWORD') is not None:
         password = os.getenv('PASSWORD')
@@ -46,4 +48,57 @@ def get_environment_variables():
         else:
             password = click.prompt('Enter password')
 
-    return user, password
+
+    if os.getenv('TO_UPLOAD_PATH') is not None:
+        local_file = os.getenv('TO_UPLOAD_PATH')
+    else:
+        local_file = Path(click.prompt('Enter the path to a local file'))
+
+    # get the absolute path from whatever is provided
+    if str(local_file).find('/'):
+        if str(local_file.parent) == '~':
+            local_file = local_file.expanduser()
+    else:
+        local_file = local_file.resolve()
+
+    remote_DriveNode_path = os.getenv('REMOTE_DRIVENODE_PATH', [])
+    command_line_silent = os.getenv('COMMAND_LINE_SILENT', False)
+
+    return user, password, local_file, remote_DriveNode_path, command_line_silent
+
+
+def render_remote_DriveNode_path(iCloud_client, remote_DriveNode_Path):
+    root = iCloud_client = iCloud_client.drive.root
+    if len(remote_DriveNode_Path) == 0:
+        is_root_node = True
+        return root, is_root_node
+    else:
+        for i in remote_DriveNode_Path:
+            root = root[i]
+
+        is_root_node = False
+        return root, is_root_node
+
+
+def render_tree(node_attributes_dict):
+    pprint.pprint(node_attributes_dict, sort_dicts=False)
+    return click.prompt(f'\n  [ ] You are in /{node_attributes_dict.get("Current Directory")} [ ]\n      \n[1] type the name of a child folder, \n[2] type "ls <target_dir>" to expand, \n[3] type "here" to select the current folder, \n[4] type "root" to return to the top \n\n  [ ]')
+
+
+
+def rename_file(Path_object, DriveNode_object):
+    new_file_name = click.prompt(f'Enter a new name for the file [old name: {Path_object.name}]')
+    to_upload_path = Path_object.parent.joinpath(new_file_name)
+    try:
+        shutil.copy(Path_object, to_upload_path)
+    except shutil.SameFileError:
+        print(f'A file named {to_upload_path} exists in local directory! Please enter a unique filename')
+        rename_file(Path_object, DriveNode_object)
+    
+    # use the built-in _children property to avoid having to make duplicate network calls
+    named = [i.name for i in DriveNode_object._children]
+    if to_upload_path.name in named:
+        print(f'A file named {to_upload_path} exists in /{DriveNode_object.name}! Please enter a unique filename')
+        rename_file(Path_object, DriveNode_object)
+
+    return to_upload_path

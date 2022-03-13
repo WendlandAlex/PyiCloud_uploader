@@ -6,63 +6,63 @@ import os
 import pprint
 
 
-from Classes import File_Tree_Node, build_file_tree, descend_file_tree, formatter
-from utils import get_environment_variables, authenticate_session
-from commandline import select_file, rename_file, traverse_file_tree
-dotenv.load_dotenv()
+from Classes import File_Tree_Node, build_file_tree
+from utils import authenticate_session, get_environment_variables, render_remote_DriveNode_path, render_tree, rename_file
 
-user, password = get_environment_variables()
-iCloud_client = pyicloud.PyiCloudService(user, password)
+def traverse_file_tree(File_Tree_Node_object):
+    current_folder, formatted = build_file_tree(File_Tree_Node_object)
 
-if not authenticate_session(iCloud_client):
-    os.abort
+    available_folders = [i for i in current_folder.children if i.get('type') == 'folder']
+    available_names = [list(i.keys())[-1] for i in available_folders]
+    # check that the selected child folder is valid
+    # for this we iterate over the metadata attributes exposed for this purpose in File_Tree_Node.children
+    # if valid, use metadata key to get index of specific object in list of children, start a new search in that child
+    # since python3 dicts are ordered, we trust that indices match between the 2 iterables
 
-local = select_file()
-
-def navigate(DriveNode_object):
-    dir = click.prompt(f'From\n{DriveNode_object.dir()}\nEnter the target directory, or type "ls [target_dir]" to expand')
+    dir = render_tree(formatted)
 
     if dir.split(' ')[0] == 'ls':
-        child_dir = ' '.join(dir.split(' ')[1:])
+        dir = ' '.join(dir.split(' ')[1:])
+        current_folder = available_folders[available_names.index(dir)].get('child')
+        return traverse_file_tree(current_folder)
 
-        res = build_file_tree(iCloud_client.drive[child_dir])
-        pprint.pprint(formatter(res), sort_dicts=False)
+    if dir.lower() == 'here':
+        return current_folder
 
-        dir = click.prompt('Select a folder, or press `enter` to use the current folder', default='')
-        if dir == '':
-            print('enter!')
-            dir = res.data
+    if dir.lower() == 'root':
+        return traverse_file_tree(iCloud_client.drive.root)
+
+    else:
+        if dir in available_names:
+            current_folder = File_Tree_Node(available_folders[available_names.index(dir)].get('child'))
+            return current_folder
+
         else:
-            print(dir+'!')
-            print(DriveNode_object[dir])
-            # print([i for i in descend_file_tree(res.data[dir])])
-            # dir = res.data[dir]
-            navigate(DriveNode_object[dir])
+            print(f'\nFolder {dir} not present!\n')
+            return traverse_file_tree(current_folder)
 
-    return dir
 
-def integrity_check(local_path, iCloud_dir, overwrite_intended=False, to_delete_file=None):
+def integrity_check(local_path, DriveNode_object, is_root_node=False, overwrite_intended=False, to_delete_file=None):
     checker_session = pyicloud.PyiCloudService(user,password)
+    checker_session_node = checker_session.drive.get_node_data(node_id=DriveNode_object.data.get("docwsid"))
+    actually_existing_items = [f'{i.get("name")}.{i.get("extension")}' for i in checker_session_node.get("items")]
 
-    checker_session_node = checker_session.drive[iCloud_dir.name].get(local_path.name)
-
-    if checker_session_node.type == 'file':
+    if local_path.name in actually_existing_items:
         if overwrite_intended == True:
             deleted_node = checker_session.drive.move_items_to_trash(
                 to_delete_file.get('drivewsid'),
                 to_delete_file.get('etag'),
                 )
-            return(checker_session_node, deleted_node)
+            return local_path.name, deleted_node
         else:
-            return(checker_session_node, {})
+            return local_path.name, {}
 
-def upload_archive(local_path, iCloud_dir, existing_item=None, overwrite_intended=False, to_delete_file=None):
-    if overwrite_intended == True:
+
+def upload_archive(local_path, DriveNode_object, is_root_node=False, existing_item=None, overwrite_intended=False, to_delete_file=None):
+    if overwrite_intended == True and existing_item:
         try:
             renamed_name=f"{'.'.join(existing_item.name.split('.')[:-1])}_deleteme.{existing_item.name.split('.')[-1]}"
-            renamed_response = existing_item.rename(renamed_name)['items'][0]
-            # logger.info(renamed_response)
-            to_delete_file=renamed_response
+            to_delete_file = existing_item.rename(renamed_name)['items'][0]
 
         except Exception as e:
             raise e
@@ -70,57 +70,105 @@ def upload_archive(local_path, iCloud_dir, existing_item=None, overwrite_intende
     os.chdir(local_path.parents[0])
     with open(local_path.name, 'rb') as archive:
         try:
-            iCloud_dir.upload(archive)
+            DriveNode_object.upload(archive)
         except Exception as e:
             raise e
 
     # iCloud API does not return on success, so verify (before deleting, if applicable)
     return integrity_check(
         local_path,
-        iCloud_dir,
+        DriveNode_object,
+        is_root_node,
         overwrite_intended,
         to_delete_file
         )
 
-try:
-    starting_dir = navigate(iCloud_client.drive)
 
-    items = starting_dir.dir()
+def generate_upload_params(DriveNode_object, local_file, selection_final=False):
+    starting_dir = traverse_file_tree(DriveNode_object)
+    if starting_dir.parent is None:
+        is_root_node = True
+    else:
+        is_root_node = False
+    to_upload_path = local_file
+    existing_item = None
     overwrite_intended = False
-    existing_item=None
-    to_upload_path = local
 
-    if local.name in items:
-        existing_item = starting_dir.get(local.name)
+    # File_Tree_Node wrapper class methods and attributes are only needed to traverse the filesystem
+    # we now de-encapsulate the DriveNode class to access methods to upload, rename, or delete files
+    starting_dir = starting_dir.drive_node
 
-        if existing_item.type == 'file':
-            overwrite_decision = click.prompt(
-                f'Warning: file {local.name} already exists in /{starting_dir.name}. \
-                Would you like to overwrite it?\nEnter "Yes" or "No"'
-                )
-
-            if overwrite_decision.lower() in ['yes', 'y', 'overwrite']:
-                overwrite_intended = True
-
-            if overwrite_intended != True:
-                to_upload_path = rename_file(local, starting_dir)
+    try:
+        items = starting_dir.dir()
+        if local_file.name not in items:
+            selection_final = True
 
         else:
-            print(f'ERROR: {existing_item.name} is a {existing_item.type}, not file')
+            existing_item = starting_dir.get(local_file.name)
 
-    uploaded, deleted = upload_archive(
-        local_path=to_upload_path,
-        iCloud_dir=starting_dir,
-        existing_item=existing_item,
-        overwrite_intended=overwrite_intended
-        ) # do some logic about the existing file
+            if existing_item.type == 'file':
+                overwrite_decision = click.prompt(
+                    f'Warning: file {local_file.name} already exists in /{starting_dir.name}. \
+                    Would you like to overwrite it?\nEnter "Yes" or "No"'
+                    )
 
-except Exception as e:
-    raise e
+                if overwrite_decision.lower() in ['yes', 'y', 'overwrite']:
+                    overwrite_intended = True
+                    selection_final = True
 
-print(
-    'UPLOADED',
-    pprint.pformat(uploaded.data),
-    '\n,',
-    'DELETED',
-    pprint.pformat(deleted),sep='\n')
+                if overwrite_intended != True:
+                    to_upload_path = rename_file(local_file, starting_dir)
+                    selection_final = True
+
+            else:
+                print(f'ERROR: {existing_item.name} is a {existing_item.type}, not file')
+                exit()
+
+    except Exception as e:
+        raise e
+
+    return (to_upload_path,
+        starting_dir,
+        is_root_node,
+        existing_item,
+        overwrite_intended
+        )
+
+
+if __name__ == '__main__':
+    dotenv.load_dotenv()
+    user, password, local_file, remote_DriveNode_path, command_line_silent = get_environment_variables()
+    iCloud_client = pyicloud.PyiCloudService(user, password)
+
+    # check for an existing session on disk, if not initiate and pass 2fa challenge
+    if not authenticate_session(iCloud_client):
+        exit()
+
+    if command_line_silent:
+        overwrite_intended = True
+        # For unattended uploads, pass the names of folders in the path as a list in .env, or pass an empty list [] for root
+        DriveNode_object, is_root_node = render_remote_DriveNode_path(iCloud_client, remote_DriveNode_path)
+        try:
+            existing_item = DriveNode_object.get(local_file.name)
+        except IndexError:
+            existing_item = None
+
+        params = local_file, DriveNode_object, is_root_node, existing_item, overwrite_intended
+
+    else:
+        params = generate_upload_params(
+            iCloud_client.drive.root,
+            local_file,
+            selection_final=False
+            )
+
+    uploaded, deleted = upload_archive(*params)
+
+    print(
+        'UPLOADED',
+        pprint.pformat({'items': uploaded}),
+        '\n',
+        'DELETED',
+        pprint.pformat(deleted),
+        sep='\n'
+    )
