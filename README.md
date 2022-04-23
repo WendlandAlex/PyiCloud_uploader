@@ -19,4 +19,4 @@ filename of the source file you want to upload. This may be either an absolute p
 Optionally, disable interactive CLI input
 
 ```TARGET_DIRECTORY (list|str)```
-If in unattended mode, provide the path to a subdirectory where the file at TO_UPLOAD_PATH will be uploaded. This may be either a `/` separated string, or a list of directory names
+If in unattended mode, provide the path to a subdirectory where the file at LOCAL_FILE will be uploaded. This may be either a `/` separated string, or a list of directory names
