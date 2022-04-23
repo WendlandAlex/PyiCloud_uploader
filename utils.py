@@ -54,13 +54,6 @@ def get_environment_variables():
     else:
         local_file = Path(click.prompt('Enter the path to a local file'))
 
-    # get the absolute path from whatever is provided
-    if str(local_file).find('/'):
-        if str(local_file.parent) == '~':
-            local_file = local_file.expanduser()
-    else:
-        local_file = local_file.resolve()
-
     remote_DriveNode_path = os.getenv('REMOTE_DRIVENODE_PATH', [])
     command_line_silent = os.getenv('COMMAND_LINE_SILENT', False)
 
@@ -83,7 +76,6 @@ def render_remote_DriveNode_path(iCloud_client, remote_DriveNode_Path):
 def render_tree(node_attributes_dict):
     pprint.pprint(node_attributes_dict, sort_dicts=False)
     return click.prompt(f'\n  [ ] You are in /{node_attributes_dict.get("Current Directory")} [ ]\n      \n[1] type the name of a child folder, \n[2] type "ls <target_dir>" to expand, \n[3] type "here" to select the current folder, \n[4] type "root" to return to the top \n\n  [ ]')
-
 
 
 def rename_file(Path_object, DriveNode_object):

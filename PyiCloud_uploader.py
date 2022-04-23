@@ -1,5 +1,6 @@
 import pyicloud
 from pyicloud.exceptions import PyiCloudException, PyiCloudAPIResponseException, PyiCloudFailedLoginException, PyiCloudNoDevicesException, PyiCloudServiceNotActivatedException
+from pathlib import Path
 import click
 import dotenv
 import os
@@ -138,10 +139,22 @@ def generate_upload_params(DriveNode_object, local_file, selection_final=False):
 if __name__ == '__main__':
     dotenv.load_dotenv()
     user, password, local_file, remote_DriveNode_path, command_line_silent = get_environment_variables()
-    iCloud_client = pyicloud.PyiCloudService(user, password)
 
-    # check for an existing session on disk, if not initiate and pass 2fa challenge
+    # construct the absolute path to the local file from whatever is provided
+    if str(local_file).find('/'):
+        if str(local_file.parent) == '~':
+            local_file = local_file.expanduser()
+    else:
+        local_file = local_file.resolve()
+    if not local_file.is_file():
+        print(f"ERROR: {local_file.name} does not exist at the specified path. Please check your spelling" )
+        exit()
+
+    # instantiate the iCloud client and check for an existing session on disk
+    # if there is no usable session, initiate 2fa challenge
+    iCloud_client = pyicloud.PyiCloudService(user, password)
     if not authenticate_session(iCloud_client):
+        print(f"ERROR: authentication failed. Please check your credentials")
         exit()
 
     if command_line_silent:
