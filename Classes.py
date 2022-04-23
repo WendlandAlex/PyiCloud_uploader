@@ -21,7 +21,8 @@ class File_Tree_Node():
         # This is a classic tree so child.parent = self
         
         def _reducer(child):
-
+            # store the name of of the child twice: once as the value for the fixed key 'child', and once as a variable key based on the child name, always at the last position
+            # when dealing with the aggregated dictionaries downstream, this gives us the ability to easily access all attributes by child name when it is already known
             return {'child': child, 'parent': self, 'type': child.type, child.name: child}
 
         return [_reducer(x) for x in self.drive_node.get_children()]
