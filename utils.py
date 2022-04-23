@@ -49,24 +49,28 @@ def get_environment_variables():
             password = click.prompt('Enter password')
 
 
-    if os.getenv('TO_UPLOAD_PATH') is not None:
-        local_file = os.getenv('TO_UPLOAD_PATH')
+    if os.getenv('LOCAL_FILE') is not None:
+        local_file = os.getenv('LOCAL_FILE')
     else:
         local_file = Path(click.prompt('Enter the path to a local file'))
 
-    remote_DriveNode_path = os.getenv('REMOTE_DRIVENODE_PATH', [])
-    command_line_silent = os.getenv('COMMAND_LINE_SILENT', False)
+    target_directory = os.getenv('TARGET_DIRECTORY', [])
+    unattended = os.getenv('UNATTENDED', False)
 
-    return user, password, local_file, remote_DriveNode_path, command_line_silent
+    return user, password, local_file, target_directory, unattended
 
 
-def render_remote_DriveNode_path(iCloud_client, remote_DriveNode_Path):
+def render_target_directory(iCloud_client, target_directory):
     root = iCloud_client = iCloud_client.drive.root
-    if len(remote_DriveNode_Path) == 0:
+
+    if isinstance(target_directory, str):
+        target_directory = target_directory.rstrip('/').split('/')
+
+    if len(target_directory) == 0:
         is_root_node = True
         return root, is_root_node
     else:
-        for i in remote_DriveNode_Path:
+        for i in target_directory:
             root = root[i]
 
         is_root_node = False

@@ -8,7 +8,7 @@ import pprint
 
 
 from Classes import File_Tree_Node, build_file_tree
-from utils import authenticate_session, get_environment_variables, render_remote_DriveNode_path, render_tree, rename_file
+from utils import authenticate_session, get_environment_variables, render_target_directory, render_tree, rename_file
 
 def traverse_file_tree(File_Tree_Node_object):
     current_folder, formatted = build_file_tree(File_Tree_Node_object)
@@ -138,7 +138,7 @@ def generate_upload_params(DriveNode_object, local_file, selection_final=False):
 
 if __name__ == '__main__':
     dotenv.load_dotenv()
-    user, password, local_file, remote_DriveNode_path, command_line_silent = get_environment_variables()
+    user, password, local_file, target_directory, unattended = get_environment_variables()
 
     # construct the absolute path to the local file from whatever is provided
     if str(local_file).find('/'):
@@ -157,10 +157,10 @@ if __name__ == '__main__':
         print(f"ERROR: authentication failed. Please check your credentials")
         exit()
 
-    if command_line_silent:
+    if unattended:
         overwrite_intended = True
         # For unattended uploads, pass the names of folders in the path as a list in .env, or pass an empty list [] for root
-        DriveNode_object, is_root_node = render_remote_DriveNode_path(iCloud_client, remote_DriveNode_path)
+        DriveNode_object, is_root_node = render_target_directory(iCloud_client, target_directory)
         try:
             existing_item = DriveNode_object.get(local_file.name)
         except IndexError:
